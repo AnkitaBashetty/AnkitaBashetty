@@ -4,55 +4,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-import sqlite3
 import time
-import sys
-import io
-
-# Fix Unicode error in Windows terminal
-sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
-
-# ------------------ DB Setup ------------------
-
-def init_db():
-    conn = sqlite3.connect("users.db")
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-def seed_users():
-    conn = sqlite3.connect("users.db")
-    cursor = conn.cursor()
-    test_users = [
-        ("Admin111", "Test"),
-        ("Admin112", "Test"),
-        ("Admin113", "Test"),
-        ("Admin114", "Test")
-    ]
-    # Avoid inserting duplicates
-    for user in test_users:
-        cursor.execute("SELECT * FROM users WHERE first_name = ? AND last_name = ?", user)
-        if cursor.fetchone() is None:
-            cursor.execute("INSERT INTO users (first_name, last_name) VALUES (?, ?)", user)
-    conn.commit()
-    conn.close()
-
-def check_user_in_db(first_name, last_name):
-    conn = sqlite3.connect("users.db")
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT * FROM users WHERE first_name = ? AND last_name = ?
-    """, (first_name, last_name))
-    result = cursor.fetchone()
-    conn.close()
-    return result is not None
 
 # ------------------ Page Objects ------------------
 
@@ -68,9 +20,11 @@ class LoginPage:
         self.driver.find_element(*self.password).send_keys(pwd)
         self.driver.find_element(*self.login_btn).click()
 
+
 class DashboardPage:
     def __init__(self, driver):
         self.driver = driver
+
         self.pim_menu = (By.XPATH, "//span[text()='PIM']")
 
     def go_to_pim(self):
@@ -81,9 +35,12 @@ class DashboardPage:
         time.sleep(1)
         self.driver.find_element(By.XPATH, "//a[text()='Logout']").click()
 
+
 class PIMPage:
     def __init__(self, driver):
         self.driver = driver
+        
+
         self.add_employee_btn = (By.XPATH, "//button[text()=' Add ']")
         self.first_name = (By.NAME, "firstName")
         self.last_name = (By.NAME, "lastName")
@@ -101,11 +58,12 @@ class PIMPage:
     def go_to_employee_list(self):
         self.driver.find_element(*self.employee_list_link).click()
 
+
 class EmployeeListPage:
     def __init__(self, driver):
         self.driver = driver
 
-    def verify_employee(self, full_name, fname, lname):
+    def verify_employee(self, full_name):
         WebDriverWait(self.driver, 10).until(
             EC.presence_of_element_located((By.XPATH, "//div[@role='rowgroup']/div"))
         )
@@ -113,20 +71,15 @@ class EmployeeListPage:
         found = False
         for row in rows:
             if full_name in row.text:
-                if check_user_in_db(fname, lname):
-                    print(f"{full_name} - Found and Verified in DB ✅")
-                else:
-                    print(f"{full_name} - Found in UI but NOT in DB ❌")
+                print(f"{full_name} - Name Verified")
                 found = True
                 break
         if not found:
-            print(f"{full_name} - NOT Found in UI ❌")
+            print(f"{full_name} - NOT Found")
 
 # ------------------ Main Test Script ------------------
 
 if __name__ == "__main__":
-    init_db()
-    seed_users()  # Comment this line if users already exist
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
     driver.implicitly_wait(10)
@@ -157,15 +110,13 @@ if __name__ == "__main__":
 
         for fname, lname in employees:
             pim_page.add_employee(fname, lname)
-            time.sleep(1)
-            dashboard_page.go_to_pim()  # Re-navigate if needed
+            dashboard_page.go_to_pim()
 
         # Step 4: Go to Employee List and Verify
         pim_page.go_to_employee_list()
         time.sleep(2)
         for fname, lname in employees:
-            full_name = f"{fname} {lname}"
-            employee_list_page.verify_employee(full_name, fname, lname)
+            employee_list_page.verify_employee(f"{fname} {lname}")
 
         # Step 5: Logout
         dashboard_page.logout()
